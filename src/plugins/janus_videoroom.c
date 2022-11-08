@@ -1179,7 +1179,7 @@ room-<unique room ID>: {
 			"feed" : <unique ID of publisher owning the new stream to subscribe to>,
 			"mid" : "<unique mid of the publisher stream to subscribe to; optional>"
 			"crossrefid" : "<id to map this subscription with entries in streams list; optional>"
-			// Optionally, simulcast or SVC targets (defaults if missing)
+			// Optionally, send, simulcast or SVC targets (defaults if missing)
 		},
 		// Other new streams to subscribe to
 	]
@@ -1283,7 +1283,7 @@ room-<unique room ID>: {
 			"feed" : <unique ID of publisher owning the new stream to subscribe to>,
 			"mid" : "<unique mid of the publisher stream to subscribe to; optional>"
 			"crossrefid" : "<id to map this subscription with entries in streams list; optional>"
-			// Optionally, simulcast or SVC targets (defaults if missing)
+			// Optionally, send, simulcast or SVC targets (defaults if missing)
 		},
 		// Other new streams to subscribe to
 	],
@@ -1847,6 +1847,7 @@ static struct janus_json_parameter subscriber_parameters[] = {
 static struct janus_json_parameter subscriber_stream_parameters[] = {
 	{"mid", JANUS_JSON_STRING, 0},
 	{"crossrefid", JANUS_JSON_STRING, 0},
+	{"send", JANUS_JSON_BOOL, 0},
 	/* For VP8 (or H.264) simulcast */
 	{"substream", JSON_INTEGER, JANUS_JSON_PARAM_POSITIVE},
 	{"temporal", JSON_INTEGER, JANUS_JSON_PARAM_POSITIVE},
@@ -3266,6 +3267,7 @@ static janus_videoroom_subscriber_stream *janus_videoroom_subscriber_stream_add_
 					stream->msid = g_strdup(ps->publisher->user_id_str);
 					g_free(msid);
 				}
+				stream->send = TRUE;
 				janus_rtp_simulcasting_context_reset(&stream->sim_context);
 				if(ps->simulcast) {
 					stream->sim_context.rid_ext_id = ps->rid_extmap_id;
@@ -3924,14 +3926,14 @@ int janus_videoroom_init(janus_callbacks *callback, const char *config_path) {
 
 	/* Finally, let's check if IPv6 is disabled, as we may need to know for forwarders */
 	int fd = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
-	if(fd <= 0) {
+	if(fd < 0) {
 		ipv6_disabled = TRUE;
 	} else {
 		int v6only = 0;
 		if(setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &v6only, sizeof(v6only)) != 0)
 			ipv6_disabled = TRUE;
 	}
-	if(fd > 0)
+	if(fd >= 0)
 		close(fd);
 	if(ipv6_disabled) {
 		JANUS_LOG(LOG_WARN, "IPv6 disabled, will only create VideoRoom forwarders to IPv4 addresses\n");
@@ -10829,6 +10831,7 @@ static void *janus_videoroom_handler(void *data) {
 						/* Are we subscribing to this publisher as a whole or only to a single stream? */
 						const char *mid = json_string_value(json_object_get(s, "mid"));
 						const char *crossrefid = json_string_value(json_object_get(s, "crossrefid"));
+						json_t *send = json_object_get(s, "send");
 						json_t *spatial = json_object_get(s, "spatial_layer");
 						json_t *sc_substream = json_object_get(s, "substream");
 						json_t *temporal = json_object_get(s, "temporal_layer");
@@ -10851,6 +10854,15 @@ static void *janus_videoroom_handler(void *data) {
 							janus_videoroom_subscriber_stream *stream = janus_videoroom_subscriber_stream_add_or_replace(subscriber, ps, crossrefid);
 							if(stream) {
 								changes++;
+								if(send) {
+									gboolean oldsend = stream->send;
+									gboolean newsend = json_is_true(send);
+									if(!oldsend && newsend) {
+										/* Medium just resumed, reset the RTP sequence numbers */
+										stream->context.seq_reset = TRUE;
+									}
+									stream->send = json_is_true(send);
+								}
 								if(ps->type == JANUS_VIDEOROOM_MEDIA_VIDEO &&
 										(spatial || sc_substream || temporal || sc_temporal)) {
 									/* Override the default spatial/substream/temporal targets */
@@ -11671,6 +11683,7 @@ static void *janus_videoroom_handler(void *data) {
 					janus_mutex_lock(&ps->rid_mutex);
 					stream->sim_context.rid_ext_id = ps->rid_extmap_id;
 					janus_mutex_unlock(&ps->rid_mutex);
+					stream->send = TRUE;
 					stream->sim_context.substream_target = 2;
 					stream->sim_context.templayer_target = 2;
 					janus_vp8_simulcast_context_reset(&stream->vp8_context);
@@ -12811,6 +12824,8 @@ static void janus_videoroom_rtp_forwarder_rtcp_receive(janus_videoroom_rtp_forwa
 				/* Look for the right publisher stream instance */
 				char *remote_id = forward->remote_id;
 				janus_videoroom_publisher_stream *ps = (janus_videoroom_publisher_stream *)forward->source;
+				if(ps == NULL)
+					return;
 				janus_videoroom_publisher *p = ps->publisher;
 				if(p == NULL || g_atomic_int_get(&p->destroyed))
 					return;
@@ -12847,7 +12862,7 @@ static void janus_videoroom_rtp_forwarder_rtcp_receive(janus_videoroom_rtp_forwa
 					temp = temp->next;
 				}
 				janus_mutex_unlock(&p->rtp_forwarders_mutex);
-				if(found && ps)
+				if(found)
 					janus_videoroom_reqpli(ps, "RTCP from remotized forwarder");
 			}
 		}
