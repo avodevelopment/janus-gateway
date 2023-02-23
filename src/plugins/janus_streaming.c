@@ -5782,12 +5782,12 @@ static void *janus_streaming_handler(void *data) {
 			if(session->mountpoint != NULL) {
 				if(session->mountpoint != mp) {
 					/* Already watching something else */
-					janus_refcount_decrease(&mp->ref);
 					JANUS_LOG(LOG_ERR, "Already watching mountpoint %s\n", session->mountpoint->id_str);
 					error_code = JANUS_STREAMING_ERROR_INVALID_STATE;
 					g_snprintf(error_cause, 512, "Already watching mountpoint %s", session->mountpoint->id_str);
 					janus_mutex_unlock(&session->mutex);
 					janus_mutex_unlock(&mp->mutex);
+					janus_refcount_decrease(&mp->ref);
 					goto error;
 				} else {
 					/* Make sure it's not an API error */
@@ -5824,7 +5824,7 @@ static void *janus_streaming_handler(void *data) {
 				janus_mutex_unlock(&session->mutex);
 				janus_mutex_unlock(&mp->mutex);
 				janus_refcount_decrease(&mp->ref);
-				JANUS_LOG(LOG_ERR, "Already watching a stream...\n");
+				JANUS_LOG(LOG_ERR, "Already watching a stream (found %p in %s's viewers)...\n", session, id_value_str);
 				error_code = JANUS_STREAMING_ERROR_UNKNOWN_ERROR;
 				g_snprintf(error_cause, 512, "Already watching a stream");
 				goto error;
@@ -9316,6 +9316,25 @@ static void *janus_streaming_relay_thread(void *data) {
 		}
 	}
 
+	/* Close the ports we bound to */
+	temp = source->media;
+	while(temp) {
+		janus_streaming_rtp_source_stream *stream = (janus_streaming_rtp_source_stream *)temp->data;
+		if(stream->fd[0] > -1)
+			close(stream->fd[0]);
+		stream->fd[0] = -1;
+		if(stream->fd[1] > -1)
+			close(stream->fd[1]);
+		stream->fd[1] = -1;
+		if(stream->fd[2] > -1)
+			close(stream->fd[2]);
+		stream->fd[2] = -1;
+		if(stream->rtcp_fd > -1)
+			close(stream->rtcp_fd);
+		stream->rtcp_fd = -1;
+		temp = temp->next;
+	}
+
 	/* Notify users this mountpoint is done */
 	janus_mutex_lock(&mountpoint->mutex);
 	GList *viewer = g_list_first(mountpoint->viewers);
@@ -9739,6 +9758,9 @@ static void janus_streaming_helper_rtprtcp_packet(gpointer data, gpointer user_d
 	copy->ssrc[2] = packet->ssrc[2];
 	copy->codec = packet->codec;
 	copy->substream = packet->substream;
+	copy->svc = packet->svc;
+	if(copy->svc)
+		copy->svc_info = packet->svc_info;
 	copy->ptype = packet->ptype;
 	copy->timestamp = packet->timestamp;
 	copy->seq_number = packet->seq_number;

@@ -873,6 +873,8 @@ const char *janus_srtp_error_str(int error) {
 #define PCMU_PT		0
 #define PCMA_PT		8
 #define G722_PT		9
+#define L16_48_PT	105
+#define L16_PT		106
 #define VP8_PT		96
 #define VP9_PT		101
 #define H264_PT		107
@@ -898,6 +900,10 @@ const char *janus_audiocodec_name(janus_audiocodec acodec) {
 			return "isac32";
 		case JANUS_AUDIOCODEC_ISAC_16K:
 			return "isac16";
+		case JANUS_AUDIOCODEC_L16_48K:
+			return "l16-48";
+		case JANUS_AUDIOCODEC_L16_16K:
+			return "l16";
 		default:
 			/* Shouldn't happen */
 			return "opus";
@@ -922,6 +928,10 @@ janus_audiocodec janus_audiocodec_from_name(const char *name) {
 		return JANUS_AUDIOCODEC_PCMA;
 	else if(!strcasecmp(name, "g722"))
 		return JANUS_AUDIOCODEC_G722;
+	else if(!strcasecmp(name, "l16-48"))
+		return JANUS_AUDIOCODEC_L16_48K;
+	else if(!strcasecmp(name, "l16"))
+		return JANUS_AUDIOCODEC_L16_16K;
 	JANUS_LOG(LOG_WARN, "Unsupported audio codec '%s'\n", name);
 	return JANUS_AUDIOCODEC_NONE;
 }
@@ -945,6 +955,10 @@ int janus_audiocodec_pt(janus_audiocodec acodec) {
 			return PCMA_PT;
 		case JANUS_AUDIOCODEC_G722:
 			return G722_PT;
+		case JANUS_AUDIOCODEC_L16_48K:
+			return L16_48_PT;
+		case JANUS_AUDIOCODEC_L16_16K:
+			return L16_PT;
 		default:
 			/* Shouldn't happen */
 			return OPUS_PT;
@@ -1132,6 +1146,7 @@ gboolean janus_rtp_simulcasting_context_process_rtp(janus_rtp_simulcasting_conte
 	/* Check what we need to do with the packet */
 	if(context->substream == -1) {
 		if((vcodec == JANUS_VIDEOCODEC_VP8 && janus_vp8_is_keyframe(payload, plen)) ||
+				(vcodec == JANUS_VIDEOCODEC_VP9 && janus_vp9_is_keyframe(payload, plen)) ||
 				(vcodec == JANUS_VIDEOCODEC_H264 && janus_h264_is_keyframe(payload, plen))) {
 			context->substream = substream;
 			/* Notify the caller that the substream changed */
@@ -1146,6 +1161,7 @@ gboolean janus_rtp_simulcasting_context_process_rtp(janus_rtp_simulcasting_conte
 		if(((context->substream < target && substream > context->substream) ||
 				(context->substream > target && substream < context->substream)) &&
 					((vcodec == JANUS_VIDEOCODEC_VP8 && janus_vp8_is_keyframe(payload, plen)) ||
+					(vcodec == JANUS_VIDEOCODEC_VP9 && janus_vp9_is_keyframe(payload, plen)) ||
 					(vcodec == JANUS_VIDEOCODEC_H264 && janus_h264_is_keyframe(payload, plen)))) {
 			JANUS_LOG(LOG_VERB, "Received keyframe on #%d (SSRC %"SCNu32"), switching (was #%d/%"SCNu32")\n",
 				substream, ssrc, context->substream, *(ssrcs + context->substream));
@@ -1194,12 +1210,13 @@ gboolean janus_rtp_simulcasting_context_process_rtp(janus_rtp_simulcasting_conte
 	/* Temporal layers are only available for VP8, so don't do anything else for other codecs */
 	if(vcodec == JANUS_VIDEOCODEC_VP8) {
 		/* Check if there's any temporal scalability to take into account */
+		gboolean m = FALSE;
 		uint16_t picid = 0;
 		uint8_t tlzi = 0;
 		uint8_t tid = 0;
 		uint8_t ybit = 0;
 		uint8_t keyidx = 0;
-		if(janus_vp8_parse_descriptor(payload, plen, &picid, &tlzi, &tid, &ybit, &keyidx) == 0) {
+		if(janus_vp8_parse_descriptor(payload, plen, &m, &picid, &tlzi, &tid, &ybit, &keyidx) == 0) {
 			//~ JANUS_LOG(LOG_WARN, "%"SCNu16", %u, %u, %u, %u\n", picid, tlzi, tid, ybit, keyidx);
 			if(context->templayer != context->templayer_target && tid == context->templayer_target) {
 				/* FIXME We should be smarter in deciding when to switch */

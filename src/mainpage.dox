@@ -3,7 +3,7 @@
  *
  * <div class="alert alert-warning">
  *		<b>Note Well:</b> these are the demos and documentation for the <code>multistream</code> version
- *		of Janus, which is a new version. If you want to check the current version of
+ *		of Janus, which is a new version. If you want to check the previous version of
  *		Janus instead (i.e., <code>0.x</code>, a.k.a. "legacy") click
  *		<a href="https://janus-legacy.conf.meetecho.com">here</a> instead.
  * </div>
@@ -75,7 +75,7 @@
  *
  * \section copyright Copyright and author
  *
- * Janus WebRTC Server © 2014-2022 <a href="https://www.meetecho.com/">Meetecho</a> (https://www.meetecho.com/)
+ * Janus WebRTC Server © 2014-2023 <a href="https://www.meetecho.com/">Meetecho</a> (https://www.meetecho.com/)
  *
  * \author Lorenzo Miniero <lorenzo@meetecho.com> ( \ref CREDITS )
  *
@@ -399,8 +399,11 @@ janus.attach(
         onlocaltrack: function(track, added) {
             // A local track to display has just been added (getUserMedia worked!) or removed
         },
-        onremotetrack: function(track, mid, added) {
+        onremotetrack: function(track, mid, added, metadata) {
             // A remote track (working PeerConnection!) with a specific mid has just been added or removed
+            // You can query metadata to get some more information on why track was added or removed
+            // metadata fields:
+            //   - reason: 'created' | 'ended' | 'mute' | 'unmute'
         },
         oncleanup: function() {
             // PeerConnection with the plugin closed, clean the UI
@@ -589,9 +592,12 @@ janus.attach(
             // Invoked after createOffer
             // This is info on a local track: when added, we can choose to render
         },
-        onremotetrack: function(track, mid, added) {
+        onremotetrack: function(track, mid, added, metadata) {
             // Invoked after handleRemoteJsep has got us a PeerConnection
             // This is info on a remote track: when added, we can choose to render
+            // You can query metadata to get some more information on why track was added or removed
+            // metadata fields:
+            //   - reason: 'created' | 'ended' | 'mute' | 'unmute'
         },
         [..]
   \endverbatim
@@ -639,9 +645,13 @@ janus.attach(
         onlocaltrack: function(track, added) {
             // This will NOT be invoked, we chose recvonly
         },
-        onremotetrack: function(track, mid, added) {
+        onremotetrack: function(track, mid, added, metadata) {
             // Invoked after send has got us a PeerConnection
             // This is info on a remote track: when added, we can choose to render
+            // This is info on a remote track: when added, we can choose to render
+            // You can query metadata to get some more information on why track was added or removed
+            // metadata fields:
+            //   - reason: 'created' | 'ended' | 'mute' | 'unmute'
         },
         [..]
   \endverbatim
@@ -3852,7 +3862,7 @@ ldd janus | grep asan
 
 /*! \page CREDITS Credits
  *
- * Janus WebRTC Server © 2014-2022 <a href="https://www.meetecho.com/">Meetecho</a> (https://www.meetecho.com/)
+ * Janus WebRTC Server © 2014-2023 <a href="https://www.meetecho.com/">Meetecho</a> (https://www.meetecho.com/)
  *
  * \b Author:
  *         Lorenzo Miniero <lorenzo@meetecho.com>

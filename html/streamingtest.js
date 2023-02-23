@@ -152,8 +152,12 @@ $(document).ready(function() {
 											});
 									}
 								},
-								onremotetrack: function(track, mid, on) {
-									Janus.debug("Remote track (mid=" + mid + ") " + (on ? "added" : "removed") + ":", track);
+								onremotetrack: function(track, mid, on, metadata) {
+									Janus.debug(
+										"Remote track (mid=" + mid + ") " +
+										(on ? "added" : "removed") +
+										(metadata ? " (" + metadata.reason + ") ": "") + ":", track
+									);
 									var mstreamId = "mstream"+mid;
 									if(streamsList[selectedStream] && streamsList[selectedStream].legacy)
 										mstreamId = "mstream0";
@@ -176,6 +180,8 @@ $(document).ready(function() {
 										delete remoteTracks[mid];
 										return;
 									}
+									if($('#remotevideo' + mid).length > 0)
+										return;
 									// If we're here, a new track was added
 									var stream = null;
 									if(track.kind === "audio") {
