@@ -3,16 +3,11 @@
 // used as well. Specifically, that file defines the "server" and
 // "iceServers" properties we'll pass when creating the Janus session.
 
+/* global iceServers:readonly, Janus:readonly, server:readonly */
+
 var janus = null;
 var vmailtest = null;
 var opaqueId = "voicemailtest-"+Janus.randomString(12);
-
-var spinner = null;
-
-var myusername = null;
-var myid = null;
-var audioenabled = false;
-
 
 $(document).ready(function() {
 	// Initialize the library (all console debuggers enabled)
@@ -90,12 +85,12 @@ $(document).ready(function() {
 								},
 								onmessage: function(msg, jsep) {
 									Janus.debug(" ::: Got a message :::", msg);
-									var event = msg["voicemail"];
+									let event = msg["voicemail"];
 									Janus.debug("Event: " + event);
 									if(event) {
 										if(event === "event") {
 											if(msg["status"]) {
-												var status = msg["status"];
+												let status = msg["status"];
 												if(status === 'starting') {
 													$('#record')
 														.removeClass("btn-danger").addClass("btn-default")
@@ -138,9 +133,11 @@ $(document).ready(function() {
 										vmailtest.handleRemoteJsep({ jsep: jsep });
 									}
 								},
+								// eslint-disable-next-line no-unused-vars
 								onlocaltrack: function(track, on) {
 									// We're not going to attach the local audio stream
 								},
+								// eslint-disable-next-line no-unused-vars
 								onremotetrack: function(track, mid, on) {
 									// We're not going to receive anything from the plugin
 								},
@@ -173,7 +170,7 @@ function startRecording() {
 			],
 			success: function(jsep) {
 				Janus.debug("Got SDP!", jsep);
-				var publish = { request: "record" };
+				let publish = { request: "record" };
 				vmailtest.send({ message: publish, jsep: jsep });
 			},
 			error: function(error) {
